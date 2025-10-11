@@ -20348,25 +20348,5 @@
     "abb": "HSM",
     "fchlgroup": "E",
     "status": "Minor"
-  },
-  {
-    "name": "Rasmus Sandin",
-    "club": "WSH",
-    "position": "D",
-    "dob": "2000-03-07",
-    "activeteam": 9,
-    "abb": "LGN",
-    "fchlgroup": "BO",
-    "status": "Minor"
-  },
-  {
-    "name": "Luke Evangelista",
-    "club": "NSH",
-    "position": "F",
-    "dob": "2002-02-21",
-    "activeteam": 6,
-    "abb": "JHN",
-    "fchlgroup": "BO",
-    "status": "Minor"
   }
 ]

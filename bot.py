@@ -33,11 +33,14 @@ RSS_FEEDS = [u.strip() for u in os.getenv("RSS_FEEDS", ",".join(DEFAULT_FEEDS)).
 POLL_EVERY_SECONDS = int(os.getenv("POLL_EVERY_SECONDS", "600"))   # 10 minutes
 POST_LOOKBACK_DAYS = int(os.getenv("POST_LOOKBACK_DAYS", "2"))     # ignore older than N days
 
+# Cold-start guard: ignore items older than bot startup (with optional grace)
+STARTUP_TIME = datetime.now(timezone.utc)
+COLD_START_IGNORE_HOURS = int(os.getenv("COLD_START_IGNORE_HOURS", "12"))
+
 # -----------------------------
 # Discord client
 # -----------------------------
-intents = discord.Intents.default()
-intents.members = False  # keep on for graceful username fallback
+intents = discord.Intents.default()  # no privileged intents required
 client = discord.Client(
     intents=intents,
     allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
@@ -113,7 +116,7 @@ def load_discord_map(path: Path) -> Dict[int, dict]:
           "discord": "legacyUsername"              # optional fallback
         }, ...
       }
-    Returned as { team_id: {...} } keyed by numeric id, plus a helper index by code and name.
+    Returned as { team_id: {...} } keyed by numeric id.
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
     by_id: Dict[int, dict] = {}
@@ -179,27 +182,7 @@ def compile_name_patterns(player_names: List[str]) -> Dict[str, re.Pattern]:
 # -----------------------------
 # Discord helpers (target building)
 # -----------------------------
-def sanitize_username(u: str) -> str:
-    return (u or "").strip()
-
 async def resolve_member_mention(guild: discord.Guild, username: str) -> Optional[str]:
-    """Best-effort username -> mention (only used if IDs are missing)."""
-    username = sanitize_username(username)
-    if not username or not guild:
-        return None
-
-    # exact match
-    for m in guild.members:
-        if m.name == username or getattr(m, "global_name", None) == username:
-            return m.mention
-    # loose startswith
-    lower = username.lower()
-    for m in guild.members:
-        if m.name.lower().startswith(lower):
-            return m.mention
-        gn = getattr(m, "global_name", None)
-        if gn and gn.lower().startswith(lower):
-            return m.mention
     return None
 
 def mention_for_role(role_id: Optional[int]) -> Optional[str]:
@@ -224,16 +207,11 @@ async def build_targets_for_player(guild: discord.Guild, player_name: str, roste
             targets.append(m)
             continue
 
-        # last resort: try resolving username to a Member
-        mention = await resolve_member_mention(guild, legacy_username) if legacy_username else None
-        if mention:
-            targets.append(mention)
+        # last resort: readable fallback (no ping) since we aren't resolving usernames
+        if legacy_username:
+            targets.append(f"**{t['team_name']}** (@{legacy_username})")
         else:
-            # readable, non-pinging fallback
-            if legacy_username:
-                targets.append(f"**{t['team_name']}** (@{legacy_username})")
-            else:
-                targets.append(f"**{t['team_name']}**")
+            targets.append(f"**{t['team_name']}**")
 
     # de-dupe while preserving order
     seen = set()
@@ -245,7 +223,6 @@ async def build_targets_for_player(guild: discord.Guild, player_name: str, roste
     return deduped
 
 def all_team_mentions(teams_by_id: Dict[int, dict]) -> Dict[int, str]:
-    """Map team_id -> mention string or readable fallback."""
     out: Dict[int, str] = {}
     for tid, t in teams_by_id.items():
         m = mention_for_role(t.get("discord_role_id")) or mention_for_user(t.get("discord_user_id"))
@@ -301,7 +278,9 @@ async def poll_feeds():
         return
 
     name_patterns = compile_name_patterns(list(roster.keys()))
-    cutoff = datetime.now(timezone.utc) - timedelta(days=POST_LOOKBACK_DAYS)
+    now = datetime.now(timezone.utc)
+    normal_cutoff = now - timedelta(days=POST_LOOKBACK_DAYS)
+    cold_start_cutoff = STARTUP_TIME - timedelta(hours=COLD_START_IGNORE_HOURS)
 
     entries: List[Tuple[str, object]] = []
     for feed_url in RSS_FEEDS:
@@ -320,15 +299,16 @@ async def poll_feeds():
         title = getattr(e, "title", "") or ""
         link = getattr(e, "link", "") or ""
         summary = getattr(e, "summary", "") or getattr(e, "description", "") or ""
-        published = parse_published(e) or datetime.now(timezone.utc)
+        published = parse_published(e) or now
 
         if not title or not link:
             continue
-        if published < cutoff:
+
+        # Drop items that are either too old normally or before cold-start window
+        if published < normal_cutoff or published < cold_start_cutoff:
             continue
 
         haystack = f"{title}\n{summary}"
-
         matched_players = [pname for pname, pat in name_patterns.items() if pat.search(haystack)]
         if not matched_players:
             continue
@@ -350,7 +330,6 @@ async def poll_feeds():
 # Slash Commands
 # -----------------------------
 def load_latest_maps():
-    """Helper to load fresh data for commands."""
     players = load_players(PLAYERS_JSON)
     teams_by_id = load_discord_map(DISCORD_JSON)
     roster = build_roster(players, teams_by_id)
@@ -367,7 +346,7 @@ async def who_has(interaction: discord.Interaction, player: str):
         await interaction.followup.send(f"Data load error: {ex}")
         return
 
-    # Find case-insensitively by exact string; if not found, try contains
+    # Exact case-insensitive, then partial
     pname_exact = next((p for p in roster.keys() if p.lower() == player.lower()), None)
     if not pname_exact:
         pname_exact = next((p for p in roster.keys() if player.lower() in p.lower()), None)
@@ -376,7 +355,6 @@ async def who_has(interaction: discord.Interaction, player: str):
         await interaction.followup.send(f"Could not find a rostered player matching “{player}”.")
         return
 
-    # Build pings
     targets = await build_targets_for_player(interaction.guild, pname_exact, roster)
     if not targets:
         await interaction.followup.send(f"**{pname_exact}** is not mapped to any Discord targets.")
@@ -389,7 +367,6 @@ async def who_has(interaction: discord.Interaction, player: str):
 @tree.command(name="test-ping", description="Ping a specific team by code or name; if omitted, show usage.")
 @app_commands.describe(team="Team code or name (optional)")
 async def test_ping(interaction: discord.Interaction, team: Optional[str] = None):
-    # If no team specified, reply ephemerally with usage and sample codes
     try:
         _, teams_by_id, _, code_idx, name_idx = load_latest_maps()
     except Exception as ex:
@@ -397,23 +374,17 @@ async def test_ping(interaction: discord.Interaction, team: Optional[str] = None
         return
 
     if not team:
-        # Show first 10 codes as a gentle hint
         codes = ", ".join(list({info['code'] for info in teams_by_id.values()})[:10])
         await interaction.response.send_message(
             f"Usage: `/test-ping team:<code or name>`\nExample codes: {codes}\n"
-            f"• Pings use role IDs first, then user IDs. Make sure roles are mentionable.",
+            f"• Pings use role IDs first, then user IDs. Ensure roles are mentionable.",
             ephemeral=True
         )
         return
 
-    # Resolve team
     key = team.lower().strip()
-    tid = None
-    if key in code_idx:
-        tid = code_idx[key]
-    elif key in name_idx:
-        tid = name_idx[key]
-    else:
+    tid = code_idx.get(key) or name_idx.get(key)
+    if not tid:
         # fuzzy contains
         for nm, t_id in name_idx.items():
             if key in nm:
@@ -430,9 +401,9 @@ async def test_ping(interaction: discord.Interaction, team: Optional[str] = None
         return
 
     info = teams_by_id[tid]
-    m = mention_for_role(info.get("discord_role_id")) or mention_for_user(info.get("discord_user_id"))
+    m = (f"<@&{int(info['discord_role_id'])}>" if info.get("discord_role_id") else None) \
+        or (f"<@{int(info['discord_user_id'])}>" if info.get("discord_user_id") else None)
     if not m:
-        # last resort readable
         usern = info.get("discord_username") or ""
         m = f"**{info['name']}**" + (f" (@{usern})" if usern else "")
 
@@ -445,7 +416,6 @@ async def test_ping(interaction: discord.Interaction, team: Optional[str] = None
 async def on_ready():
     print(f"Logged in as {client.user} (guilds: {[g.name for g in client.guilds]})")
     seen_db_init()
-    # Sync commands to all guilds the bot is currently in
     try:
         await tree.sync()  # global sync (fine for a single private server)
         print("Slash commands synced.")
