@@ -21,7 +21,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
 
 PLAYERS_JSON = Path(os.getenv("PLAYERS_JSON", "players.json"))
-DISCORD_JSON = Path(os.getenv("DISCORD_JSON", "Discord.json"))
+DISCORD_JSON = Path(os.getenv("DISCORD_JSON", "discord.json"))
 
 DEFAULT_FEEDS = [
     "https://www.espn.com/espn/rss/nhl/news",
