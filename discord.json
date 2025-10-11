@@ -1,0 +1,57 @@
+{
+    "GVR": {
+        "id": 7,
+        "name": "Grovenor Drew",
+        "discord_user_id": "1410850542627852328"
+    },
+    "VPP": {
+        "id": 10,
+        "name": "Varsity Park Partisans",
+        "discord_user_id": "1404875971861024768"
+    },
+    "BOT": {
+        "id": 1,
+        "name": "Bridlewood AI",
+        "discord_user_id": "204364842402840576"
+    },
+    "ZSK": {
+        "id": 8,
+        "name": "The Zalesaks",
+        "discord_user_id": "488489125801099270"
+    },
+    "HSM": {
+        "id": 11,
+        "name": "Heskel Salims",
+        "discord_user_id": "1413673401955909672"
+    },
+    "LPT": {
+        "id": 4,
+        "name": "Lipton Soup Nuts",
+        "discord_user_id": "1413685248012849276"
+    },
+    "SHF": {
+        "id": 5,
+        "name": "The Shafranators",
+        "discord_user_id": "638080391990870020"
+    },
+    "JHN": {
+        "id": 6,
+        "name": "Johannesburg Israeleafs",
+        "discord_user_id": "1413685340530802688"
+    },
+    "SRL": {
+        "id": 2,
+        "name": "Searle Supremes",
+        "discord_user_id": "779070593583939603"
+    },
+    "LGN": {
+        "id": 9,
+        "name": "Lessard Gnomes",
+        "discord_user_id": "794020061777887233"
+    },
+    "MAC": {
+        "id": 3,
+        "name": "Maccabi Tevatron",
+        "discord_user_id": "1413649798988304464"
+    }
+}
