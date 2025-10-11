@@ -37,7 +37,7 @@ POST_LOOKBACK_DAYS = int(os.getenv("POST_LOOKBACK_DAYS", "2"))     # ignore olde
 # Discord client
 # -----------------------------
 intents = discord.Intents.default()
-intents.members = True  # keep on for graceful username fallback
+intents.members = False  # keep on for graceful username fallback
 client = discord.Client(
     intents=intents,
     allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
