@@ -1,2 +1,2 @@
 [start]
-cmd = "python bot.py"
+cmd = "python csv_to_players.py && python bot.py"
