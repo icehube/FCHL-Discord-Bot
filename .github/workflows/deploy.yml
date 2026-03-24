@@ -18,3 +18,4 @@ jobs:
             cd /opt/FCHL-Discord-Bot
             git pull origin main
             docker compose up -d --build
+            docker exec fchl-discord-bot python csv_to_players.py
