@@ -148,19 +148,21 @@ On first start, slash-commands are synced globally. In Discord, type `/who-has` 
 
 The bot runs on a Digital Ocean server and auto-deploys on push to `main` via GitHub Actions (see `.github/workflows/deploy.yml`).
 
-The workflow SSHes into the droplet and runs:
+The workflow SSHes into the droplet as the unprivileged `deploy` user (in the `docker` group) and runs:
 
 ```bash
 cd /opt/FCHL-Discord-Bot
-git pull origin main
+git pull --ff-only origin main
 docker compose up -d --build
+docker exec fchl-discord-bot python csv_to_players.py
 ```
 
 **Setup:**
 
-* Provision a Droplet and clone the repo to `/opt/FCHL-Discord-Bot`
+* Provision a Droplet and clone the repo to `/opt/FCHL-Discord-Bot`, owned by `deploy`
 * Set env vars (`DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, etc.) in your Docker Compose or `.env` file
-* Add these GitHub Actions secrets: `DROPLET_HOST`, `DROPLET_USER`, `DROPLET_SSH_KEY`
+* Generate a deploy key used only by this repo and add its public half to `/home/deploy/.ssh/authorized_keys` with the `restrict` option
+* GitHub: secrets `DO_SSH_KEY` (the deploy key's private half) and `DO_KNOWN_HOSTS` (`ssh-keyscan <host>`); variable `DO_HOST`
 * Make sure the role IDs you use are **mentionable** in your server settings
 
 ---

@@ -1,21 +1,39 @@
 name: Deploy Discord Bot
 
+# Pulls main on the Droplet and rebuilds the bot container on every push to main.
+# Logs in as the unprivileged `deploy` user with a key used only by this repo.
+
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bot
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: |
-            cd /opt/FCHL-Discord-Bot
-            git pull origin main
-            docker compose up -d --build
-            docker exec fchl-discord-bot python csv_to_players.py
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DO_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          HOST: ${{ vars.DO_HOST }}
+        run: |
+          ssh "deploy@$HOST" 'cd /opt/FCHL-Discord-Bot \
+            && git pull --ff-only origin main \
+            && docker compose up -d --build \
+            && docker exec fchl-discord-bot python csv_to_players.py'
