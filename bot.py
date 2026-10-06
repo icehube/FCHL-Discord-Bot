@@ -28,7 +28,6 @@ DEFAULT_FEEDS = [
     "https://api.foxsports.com/v2/content/optimized-rss?partnerKey=MB0Wehpmuj2lUhuRhQaafhBjAJqaPU244mlTDK1i&size=50&tags=fs/nhl",
     "https://www.rotowire.com/rss/news.php?sport=NHL",
     "https://www.sportsnet.ca/hockey/nhl/feed",
-    "https://sports.yahoo.com/nhl/rss/",
     "https://www.dailyfaceoff.com/feed",
     "http://dobberhockey.com/feed",
 ]
